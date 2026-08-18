@@ -305,7 +305,7 @@ export abstract class AbstractApiClient implements IApiClient {
   }
 
   /** Resolve logical api paths (`/api/...`) against the current mount path. */
-  private resolveApiUrl(path: string): URL {
+  protected resolveApiUrl(path: string): URL {
     return new URL(path.startsWith('/') ? path.slice(1) : path, this.resolveBase())
   }
 
