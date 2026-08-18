@@ -233,6 +233,16 @@ type UnaryTimeoutPolicy = 'default' | 'caller-signal-only'
 /** URL base for in-process handler injection (fake authority, opencode precedent). */
 const INTERNAL_BASE = 'http://dsh.internal/'
 
+/** Resolve browser same-origin API base with the current mount path, or the internal authority in non-browser contexts. */
+export function resolveWebMountBase(): string {
+  const loc = (globalThis as { location?: { origin?: string; pathname?: string } }).location
+  if (loc?.origin === undefined || loc.origin === 'null') return INTERNAL_BASE
+  const mountPath = loc.pathname === undefined
+    ? '/'
+    : loc.pathname.endsWith('/') ? loc.pathname : `${loc.pathname}/`
+  return new URL(mountPath, `${loc.origin}/`).href
+}
+
 /**
  * Abstract fetch-carrier client. Subclasses supply the transport (doFetch) and may refine the
  * per-message tap (onEnvelope) — platform aspects stay in subclasses, protocol invariants stay
@@ -291,12 +301,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   /** Browser = same-origin plus current mount path; no-location env (Node) = fake authority. */
   protected resolveBase(): string {
-    const loc = (globalThis as { location?: { origin?: string; pathname?: string } }).location
-    if (loc?.origin === undefined || loc.origin === 'null') return INTERNAL_BASE
-    const mountPath = loc.pathname === undefined
-      ? '/'
-      : loc.pathname.endsWith('/') ? loc.pathname : `${loc.pathname}/`
-    return new URL(mountPath, `${loc.origin}/`).href
+    return resolveWebMountBase()
   }
 
   /** Resolve logical api paths (`/api/...`) against the current mount path. */
