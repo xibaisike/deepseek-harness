@@ -240,7 +240,7 @@ export function resolveWebMountBase(): string {
   const mountPath = loc.pathname === undefined
     ? '/'
     : loc.pathname.endsWith('/') ? loc.pathname : `${loc.pathname}/`
-  return new URL(mountPath, `${loc.origin}/`).href
+  return `${loc.origin}${mountPath}`
 }
 
 /**
