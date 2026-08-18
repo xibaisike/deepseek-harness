@@ -788,7 +788,10 @@ describe('resolveBase', () => {
     await probe.sessions.list({})
     expect(probe.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
 
-    const globalWithLocation = globalThis as { location?: { origin?: string; pathname?: string } }
+    const globalWithLocation = globalThis as {
+      location?: { origin?: string; pathname?: string }
+      document?: { baseURI?: string }
+    }
     globalWithLocation.location = { origin: 'http://host.example', pathname: '/proxy/3000' }
     try {
       const probe2 = new Probe()
@@ -798,12 +801,18 @@ describe('resolveBase', () => {
       const probe3 = new Probe()
       await probe3.sessions.list({})
       expect(probe3.urls[0]).toMatch(/^http:\/\/host\.example\/proxy\/3000\/api\//)
-      globalWithLocation.location = { origin: 'null' } // sandboxed iframe shape
+      globalWithLocation.document = { baseURI: 'http://host.example/proxy/3000/' }
+      globalWithLocation.location = { origin: 'http://host.example', pathname: '/proxy/3000/session/abc' }
       const probe4 = new Probe()
       await probe4.sessions.list({})
-      expect(probe4.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
+      expect(probe4.urls[0]).toMatch(/^http:\/\/host\.example\/proxy\/3000\/api\//)
+      globalWithLocation.location = { origin: 'null' } // sandboxed iframe shape
+      const probe5 = new Probe()
+      await probe5.sessions.list({})
+      expect(probe5.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
     } finally {
       delete globalWithLocation.location
+      delete globalWithLocation.document
     }
   })
 })

@@ -237,10 +237,25 @@ const INTERNAL_BASE = 'http://dsh.internal/'
 export function resolveWebMountBase(): string {
   const loc = (globalThis as { location?: { origin?: string; pathname?: string } }).location
   if (loc?.origin === undefined || loc.origin === 'null') return INTERNAL_BASE
-  const mountPath = loc.pathname === undefined
-    ? '/'
-    : loc.pathname.endsWith('/') ? loc.pathname : `${loc.pathname}/`
+  const mountPath = resolveMountPath(loc.origin, loc.pathname)
   return `${loc.origin}${mountPath}`
+}
+
+function resolveMountPath(origin: string, pathname: string | undefined): string {
+  const docBase = (globalThis as { document?: { baseURI?: string } }).document?.baseURI
+  if (docBase !== undefined) {
+    try {
+      const url = new URL(docBase)
+      if (url.origin === origin && (url.protocol === 'http:' || url.protocol === 'https:')) {
+        return url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`
+      }
+    } catch {
+      // ignored: fall through to location pathname.
+    }
+  }
+  return pathname === undefined
+    ? '/'
+    : pathname.endsWith('/') ? pathname : `${pathname}/`
 }
 
 /**
