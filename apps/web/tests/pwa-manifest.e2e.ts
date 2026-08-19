@@ -8,6 +8,8 @@ const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
 it('ships install metadata with the built web application', async () => {
   const index = await readFile(join(DIST_ROOT, 'index.html'), 'utf8')
   expect(index).toContain('<link rel="manifest" href="/manifest.webmanifest" />')
+  expect(index).not.toMatch(/(?:src|href)="\/assets\//)
+  expect(index).toMatch(/(?:src|href)="\.\/assets\//)
 
   const manifest: unknown = JSON.parse(await readFile(join(DIST_ROOT, 'manifest.webmanifest'), 'utf8'))
   expect(manifest).toEqual({
