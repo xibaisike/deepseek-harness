@@ -10,7 +10,7 @@ import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
 import { WebApiClient } from '../src/client/web-api-client.ts'
 
-type Win = { location?: { hostname: string; search: string; origin?: string } }
+type Win = { location?: { hostname: string; search: string; origin?: string; pathname?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
 
 const originalWebSocket = globalThis.WebSocket
@@ -196,7 +196,7 @@ describe('connection client apply', () => {
 
   it('opens one WebSocket per downlink, parses frames, and aborts both without using fetch', async () => {
     ;(globalThis as Win).location = {
-      hostname: 'localhost', search: '', origin: 'http://localhost:3080',
+      hostname: 'localhost', search: '', origin: 'http://localhost:3080', pathname: '/proxy/3080/',
     }
     ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket
     const fetch = vi.spyOn(globalThis, 'fetch')
@@ -212,8 +212,8 @@ describe('connection client apply', () => {
     const hostFrame = host.next()
     await vi.waitFor(() => { expect(sockets).toHaveLength(2) })
     expect(sockets.map(socket => socket.url)).toEqual([
-      'ws://localhost:3080/api/events.mux',
-      'ws://localhost:3080/api/events.host',
+      'ws://localhost:3080/proxy/3080/api/events.mux',
+      'ws://localhost:3080/proxy/3080/api/events.host',
     ])
     await vi.waitFor(() => { expect(opened).toEqual(['mux', 'host']) })
 
@@ -255,14 +255,14 @@ describe('connection client apply', () => {
 
   it('maps an HTTPS page origin to a secure WebSocket URL', async () => {
     ;(globalThis as Win).location = {
-      hostname: 'harness.example', search: '', origin: 'https://harness.example',
+      hostname: 'harness.example', search: '', origin: 'https://harness.example', pathname: '/proxy/443',
     }
     ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket
     const client = (await mount()).api
     const abort = new AbortController()
     const iterator = client.events.mux({}, abort.signal)[Symbol.asyncIterator]()
     const pending = iterator.next()
-    await vi.waitFor(() => { expect(sockets[0]?.url).toBe('wss://harness.example/api/events.mux') })
+    await vi.waitFor(() => { expect(sockets[0]?.url).toBe('wss://harness.example/proxy/443/api/events.mux') })
     abort.abort()
     await expect(pending).resolves.toMatchObject({ done: true })
   })
@@ -321,7 +321,7 @@ describe('connection client apply', () => {
 
   it('validates generic RPC transport failures, correlation, and targets', async () => {
     ;(globalThis as Win).location = {
-      hostname: 'harness.example', search: '', origin: 'https://harness.example',
+      hostname: 'harness.example', search: '', origin: 'https://harness.example', pathname: '/proxy/8443',
     }
     const handle = await mount()
     const original = globalThis.fetch
@@ -331,7 +331,7 @@ describe('connection client apply', () => {
       await expect(handle.rpc.call('/api', 'goals/create', {}, abort.signal))
         .rejects.toThrow('HTTP 503')
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        new URL('https://harness.example/api/goals/create'),
+        new URL('https://harness.example/proxy/8443/api/goals/create'),
         expect.objectContaining({ signal: abort.signal }),
       )
 

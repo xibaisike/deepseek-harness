@@ -231,7 +231,32 @@ const DEFAULT_TIMEOUT_MS = 30_000
 type UnaryTimeoutPolicy = 'default' | 'caller-signal-only'
 
 /** URL base for in-process handler injection (fake authority, opencode precedent). */
-const INTERNAL_BASE = 'http://dsh.internal'
+const INTERNAL_BASE = 'http://dsh.internal/'
+
+/** Resolve browser same-origin API base with the current mount path, or the internal authority in non-browser contexts. */
+export function resolveWebMountBase(): string {
+  const loc = (globalThis as { location?: { origin?: string; pathname?: string } }).location
+  if (loc?.origin === undefined || loc.origin === 'null') return INTERNAL_BASE
+  const mountPath = resolveMountPath(loc.origin, loc.pathname)
+  return `${loc.origin}${mountPath}`
+}
+
+function resolveMountPath(origin: string, pathname: string | undefined): string {
+  const docBase = (globalThis as { document?: { baseURI?: string } }).document?.baseURI
+  if (docBase !== undefined) {
+    try {
+      const url = new URL(docBase)
+      if (url.origin === origin && (url.protocol === 'http:' || url.protocol === 'https:')) {
+        return url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`
+      }
+    } catch {
+      // ignored: fall through to location pathname.
+    }
+  }
+  return pathname === undefined
+    ? '/'
+    : pathname.endsWith('/') ? pathname : `${pathname}/`
+}
 
 /**
  * Abstract fetch-carrier client. Subclasses supply the transport (doFetch) and may refine the
@@ -289,10 +314,14 @@ export abstract class AbstractApiClient implements IApiClient {
     })
   }
 
-  /** Browser = same-origin (a fake authority would fail DNS on real requests); no-location env (Node) = fake authority. */
+  /** Browser = same-origin plus current mount path; no-location env (Node) = fake authority. */
   protected resolveBase(): string {
-    const loc = (globalThis as { location?: { origin?: string } }).location
-    return loc?.origin !== undefined && loc.origin !== 'null' ? loc.origin : INTERNAL_BASE
+    return resolveWebMountBase()
+  }
+
+  /** Resolve logical api paths (`/api/...`) against the current mount path. */
+  protected resolveApiUrl(path: string): URL {
+    return new URL(path.startsWith('/') ? path.slice(1) : path, this.resolveBase())
   }
 
   protected mintRpcId(): RpcId {
@@ -315,7 +344,7 @@ export abstract class AbstractApiClient implements IApiClient {
         ? AbortSignal.timeout(this.timeoutMs)
         : AbortSignal.any([AbortSignal.timeout(this.timeoutMs), signal])
       : signal
-    const response = await this.doFetch(new URL(path, this.resolveBase()), {
+    const response = await this.doFetch(this.resolveApiUrl(path), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -372,7 +401,7 @@ export abstract class AbstractApiClient implements IApiClient {
     frameSchema: z.ZodType<F>,
     onOpen?: () => void,
   ): AsyncGenerator<RpcRequest<F>> {
-    const response = await this.doFetch(new URL(path, this.resolveBase()), { signal })
+    const response = await this.doFetch(this.resolveApiUrl(path), { signal })
     if (!response.ok || response.body === null) throw new Error(`transport failure for ${path}: HTTP ${response.status}`)
     onOpen?.()
     const reader = response.body.getReader()

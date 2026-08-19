@@ -769,7 +769,7 @@ describe('envelope observation', () => {
 })
 
 describe('resolveBase', () => {
-  it('prefers a real location.origin and falls back to the internal authority', async () => {
+  it('prefers location origin+mount path and falls back to the internal authority', async () => {
     class Probe extends AbstractApiClient {
       urls: string[] = []
       protected async doFetch(input: URL): Promise<Response> {
@@ -788,18 +788,31 @@ describe('resolveBase', () => {
     await probe.sessions.list({})
     expect(probe.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
 
-    const globalWithLocation = globalThis as { location?: { origin?: string } }
-    globalWithLocation.location = { origin: 'http://host.example' }
+    const globalWithLocation = globalThis as {
+      location?: { origin?: string; pathname?: string }
+      document?: { baseURI?: string }
+    }
+    globalWithLocation.location = { origin: 'http://host.example', pathname: '/proxy/3000' }
     try {
       const probe2 = new Probe()
       await probe2.sessions.list({})
-      expect(probe2.urls[0]).toMatch(/^http:\/\/host\.example\//)
-      globalWithLocation.location = { origin: 'null' } // sandboxed iframe shape
+      expect(probe2.urls[0]).toMatch(/^http:\/\/host\.example\/proxy\/3000\/api\//)
+      globalWithLocation.location = { origin: 'http://host.example', pathname: '/proxy/3000/' }
       const probe3 = new Probe()
       await probe3.sessions.list({})
-      expect(probe3.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
+      expect(probe3.urls[0]).toMatch(/^http:\/\/host\.example\/proxy\/3000\/api\//)
+      globalWithLocation.document = { baseURI: 'http://host.example/proxy/3000/' }
+      globalWithLocation.location = { origin: 'http://host.example', pathname: '/proxy/3000/session/abc' }
+      const probe4 = new Probe()
+      await probe4.sessions.list({})
+      expect(probe4.urls[0]).toMatch(/^http:\/\/host\.example\/proxy\/3000\/api\//)
+      globalWithLocation.location = { origin: 'null' } // sandboxed iframe shape
+      const probe5 = new Probe()
+      await probe5.sessions.list({})
+      expect(probe5.urls[0]).toMatch(/^http:\/\/dsh\.internal\//)
     } finally {
       delete globalWithLocation.location
+      delete globalWithLocation.document
     }
   })
 })

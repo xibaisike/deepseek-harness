@@ -90,6 +90,9 @@ function npmPackageOf(id: string): string | undefined {
 }
 
 export default defineConfig({
+  // Build-time asset links must stay mount-relative so proxied paths like
+  // `/proxy/<port>/` request `/proxy/<port>/assets/*` instead of `/assets/*`.
+  base: './',
   plugins: [rejectStandaloneServe(), react()],
   build: {
     sourcemap: true,
